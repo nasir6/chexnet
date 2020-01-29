@@ -10,7 +10,7 @@ from ChexnetTrainer import ChexnetTrainer
 def main ():
     
     runTest()
-    #runTrain()
+    # runTrain()
   
 #--------------------------------------------------------------------------------   
 
@@ -25,14 +25,14 @@ def runTrain():
     timestampLaunch = timestampDate + '-' + timestampTime
     
     #---- Path to the directory with images
-    pathDirData = './database'
+    pathDirData = '/raid/mun/codes/data/xrays'
     
     #---- Paths to the files with training, validation and testing sets.
     #---- Each file should contains pairs [path to image, output vector]
     #---- Example: images_011/00027736_001.png 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-    pathFileTrain = './dataset/train_1.txt'
-    pathFileVal = './dataset/val_1.txt'
-    pathFileTest = './dataset/test_1.txt'
+    pathFileTrain = 'split/train_list.txt'
+    pathFileVal = 'split/val_list.txt'
+    pathFileTest = 'split/test_list.txt'
     
     #---- Neural network parameters: type of the network, is it pre-trained 
     #---- on imagenet, number of classes
@@ -41,17 +41,17 @@ def runTrain():
     nnClassCount = 14
     
     #---- Training settings: batch size, maximum number of epochs
-    trBatchSize = 16
+    trBatchSize = 256
     trMaxEpoch = 100
     
     #---- Parameters related to image transforms: size of the down-scaled image, cropped image
     imgtransResize = 256
     imgtransCrop = 224
-        
+    checkpoint = None#'m-31122019-030236.pth.tar'    
     pathModel = 'm-' + timestampLaunch + '.pth.tar'
     
     print ('Training NN architecture = ', nnArchitecture)
-    ChexnetTrainer.train(pathDirData, pathFileTrain, pathFileVal, nnArchitecture, nnIsTrained, nnClassCount, trBatchSize, trMaxEpoch, imgtransResize, imgtransCrop, timestampLaunch, None)
+    ChexnetTrainer.train(pathDirData, pathFileTrain, pathFileVal, nnArchitecture, nnIsTrained, nnClassCount, trBatchSize, trMaxEpoch, imgtransResize, imgtransCrop, timestampLaunch, checkpoint)
     
     print ('Testing the trained model')
     ChexnetTrainer.test(pathDirData, pathFileTest, pathModel, nnArchitecture, nnClassCount, nnIsTrained, trBatchSize, imgtransResize, imgtransCrop, timestampLaunch)
@@ -60,8 +60,8 @@ def runTrain():
 
 def runTest():
     
-    pathDirData = './database'
-    pathFileTest = './dataset/test_1.txt'
+    pathDirData = '/raid/mun/codes/data/xrays'
+    pathFileTest = 'test_list.txt'
     nnArchitecture = 'DENSE-NET-121'
     nnIsTrained = True
     nnClassCount = 14
@@ -69,7 +69,7 @@ def runTest():
     imgtransResize = 256
     imgtransCrop = 224
     
-    pathModel = './models/m-25012018-123527.pth.tar'
+    pathModel = 'm-06012020-090102.pth.tar'
     
     timestampLaunch = ''
     

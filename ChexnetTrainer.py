@@ -20,6 +20,7 @@ from DensenetModels import DenseNet121
 from DensenetModels import DenseNet169
 from DensenetModels import DenseNet201
 from DatasetGenerator import DatasetGenerator
+from autoaugment import XRaysPolicy
 
 
 #-------------------------------------------------------------------------------- 
@@ -42,7 +43,6 @@ class ChexnetTrainer ():
     
     def train (pathDirData, pathFileTrain, pathFileVal, nnArchitecture, nnIsTrained, nnClassCount, trBatchSize, trMaxEpoch, transResize, transCrop, launchTimestamp, checkpoint):
 
-        
         #-------------------- SETTINGS: NETWORK ARCHITECTURE
         if nnArchitecture == 'DENSE-NET-121': model = DenseNet121(nnClassCount, nnIsTrained).cuda()
         elif nnArchitecture == 'DENSE-NET-169': model = DenseNet169(nnClassCount, nnIsTrained).cuda()
@@ -56,36 +56,48 @@ class ChexnetTrainer ():
         transformList = []
         transformList.append(transforms.RandomResizedCrop(transCrop))
         transformList.append(transforms.RandomHorizontalFlip())
+        # with data augmentation
+        transformList.append(XRaysPolicy())
+
         transformList.append(transforms.ToTensor())
         transformList.append(normalize)      
         transformSequence=transforms.Compose(transformList)
 
         #-------------------- SETTINGS: DATASET BUILDERS
-        datasetTrain = DatasetGenerator(pathImageDirectory=pathDirData, pathDatasetFile=pathFileTrain, transform=transformSequence)
-        datasetVal =   DatasetGenerator(pathImageDirectory=pathDirData, pathDatasetFile=pathFileVal, transform=transformSequence)
+        datasetTrain = DatasetGenerator(pathDirData, pathFileTrain, transform=transformSequence)
+        datasetVal =   DatasetGenerator(pathDirData, pathFileVal, transform=transformSequence)
               
         dataLoaderTrain = DataLoader(dataset=datasetTrain, batch_size=trBatchSize, shuffle=True,  num_workers=24, pin_memory=True)
         dataLoaderVal = DataLoader(dataset=datasetVal, batch_size=trBatchSize, shuffle=False, num_workers=24, pin_memory=True)
         
         #-------------------- SETTINGS: OPTIMIZER & SCHEDULER
-        optimizer = optim.Adam (model.parameters(), lr=0.0001, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
+        # optimizer = optim.Adam (model.parameters(), lr=0.005, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-4)
+
+        optimizer = optim.SGD(
+        filter(
+            lambda p: p.requires_grad,
+            model.parameters()),
+        lr=0.01,
+        momentum=0.9,
+        weight_decay=5e-4)
         scheduler = ReduceLROnPlateau(optimizer, factor = 0.1, patience = 5, mode = 'min')
-                
+
         #-------------------- SETTINGS: LOSS
         loss = torch.nn.BCELoss(size_average = True)
         
         #---- Load checkpoint 
+        start_epoch = 0
         if checkpoint != None:
             modelCheckpoint = torch.load(checkpoint)
             model.load_state_dict(modelCheckpoint['state_dict'])
             optimizer.load_state_dict(modelCheckpoint['optimizer'])
-
+            start_epoch = modelCheckpoint['epoch']
         
         #---- TRAIN THE NETWORK
         
         lossMIN = 100000
         
-        for epochID in range (0, trMaxEpoch):
+        for epochID in range (start_epoch, trMaxEpoch):
             
             timestampTime = time.strftime("%H%M%S")
             timestampDate = time.strftime("%d%m%Y")
@@ -98,7 +110,7 @@ class ChexnetTrainer ():
             timestampDate = time.strftime("%d%m%Y")
             timestampEND = timestampDate + '-' + timestampTime
             
-            scheduler.step(losstensor.data[0])
+            scheduler.step(losstensor.item())
             
             if lossVal < lossMIN:
                 lossMIN = lossVal    
@@ -126,6 +138,8 @@ class ChexnetTrainer ():
             optimizer.zero_grad()
             lossvalue.backward()
             optimizer.step()
+            if batchID % 10 == 9:
+                print(f"[{batchID:04}/{len(dataLoader)}]loss : {lossvalue.item()}")
             
     #-------------------------------------------------------------------------------- 
         
@@ -137,21 +151,21 @@ class ChexnetTrainer ():
         lossValNorm = 0
         
         losstensorMean = 0
-        
-        for i, (input, target) in enumerate (dataLoader):
+        for i, (input_, target) in enumerate (dataLoader):
+            with torch.no_grad():
             
-            target = target.cuda(async=True)
-                 
-            varInput = torch.autograd.Variable(input, volatile=True)
-            varTarget = torch.autograd.Variable(target, volatile=True)    
-            varOutput = model(varInput)
-            
-            losstensor = loss(varOutput, varTarget)
-            losstensorMean += losstensor
-            
-            lossVal += losstensor.data[0]
-            lossValNorm += 1
-            
+                target = target.cuda(async=True)
+                    
+                varInput = torch.autograd.Variable(input_)
+                varTarget = torch.autograd.Variable(target)    
+                varOutput = model(varInput)
+                
+                losstensor = loss(varOutput, varTarget)
+                losstensorMean += losstensor
+                
+                lossVal += losstensor.item()
+                lossValNorm += 1
+                del varOutput, varTarget, varInput, target, input_
         outLoss = lossVal / lossValNorm
         losstensorMean = losstensorMean / lossValNorm
         
@@ -222,7 +236,7 @@ class ChexnetTrainer ():
         transformList.append(transforms.Lambda(lambda crops: torch.stack([normalize(crop) for crop in crops])))
         transformSequence=transforms.Compose(transformList)
         
-        datasetTest = DatasetGenerator(pathImageDirectory=pathDirData, pathDatasetFile=pathFileTest, transform=transformSequence)
+        datasetTest = DatasetGenerator(pathDirData, pathFileTest, transform=transformSequence)
         dataLoaderTest = DataLoader(dataset=datasetTest, batch_size=trBatchSize, num_workers=8, shuffle=False, pin_memory=True)
         
         outGT = torch.FloatTensor().cuda()
@@ -231,18 +245,20 @@ class ChexnetTrainer ():
         model.eval()
         
         for i, (input, target) in enumerate(dataLoaderTest):
-            
-            target = target.cuda()
-            outGT = torch.cat((outGT, target), 0)
-            
-            bs, n_crops, c, h, w = input.size()
-            
-            varInput = torch.autograd.Variable(input.view(-1, c, h, w).cuda(), volatile=True)
-            
-            out = model(varInput)
-            outMean = out.view(bs, n_crops, -1).mean(1)
-            
-            outPRED = torch.cat((outPRED, outMean.data), 0)
+            with torch.no_grad():
+                target = target.cuda()
+                outGT = torch.cat((outGT, target), 0)
+                
+                bs, n_crops, c, h, w = input.size()
+                
+                varInput = torch.autograd.Variable(input.view(-1, c, h, w).cuda())
+                
+                out = model(varInput)
+                outMean = out.view(bs, n_crops, -1).mean(1)
+                
+                outPRED = torch.cat((outPRED, outMean.data), 0)
+                # del varOutput, varTarget, varInput, target, input_
+
 
         aurocIndividual = ChexnetTrainer.computeAUROC(outGT, outPRED, nnClassCount)
         aurocMean = np.array(aurocIndividual).mean()
