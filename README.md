@@ -18,18 +18,36 @@ implementation.
 
 * Pytorch
 
-        conda install pytorch==1.0.1 torchvision==0.2.2 cudatoolkit=9.0 -c pytorch
+        conda install pytorch==1.1.0 torchvision cudatoolkit=9.0 -c pytorch
+
 
 * OpenCV (for generating CAMs)
 
         conda install -c menpo opencv
+
+* Pillow
+
+        pip install Pillow==6.1
+
+* sklearn
+
+        conda install -c anaconda scikit-learn
+    
+* pandas
+
+        conda install -c anaconda pandas
+
+
 
 
 
 ## Usage
 * Download the ChestX-ray14 database from [here](https://nihcc.app.box.com/v/ChestXray-NIHCC/folder/37178474737)
 * Unpack archives in separate directories copy all subdirectories images to database/xrays/images
-* Run **python Main.py** to run test/train by setting appropriate variables values
+* To run test/train by setting appropriate variables values in Main.py
+
+        python Main.py
+
 * Use the **runTrain()** function in the **Main.py** to train a model from scratch
 
 This implementation allows to conduct experiments with 3 different densenet architectures: densenet-121, densenet-169 and

@@ -57,7 +57,7 @@ class ChexnetTrainer ():
         transformList.append(transforms.RandomResizedCrop(transCrop))
         transformList.append(transforms.RandomHorizontalFlip())
         # with data augmentation
-        transformList.append(XRaysPolicy())
+        # transformList.append(XRaysPolicy())
 
         transformList.append(transforms.ToTensor())
         transformList.append(normalize)      
@@ -71,15 +71,15 @@ class ChexnetTrainer ():
         dataLoaderVal = DataLoader(dataset=datasetVal, batch_size=trBatchSize, shuffle=False, num_workers=24, pin_memory=True)
         
         #-------------------- SETTINGS: OPTIMIZER & SCHEDULER
-        # optimizer = optim.Adam (model.parameters(), lr=0.005, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-4)
+        optimizer = optim.Adam (model.parameters(), lr=0.0001, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
 
-        optimizer = optim.SGD(
-        filter(
-            lambda p: p.requires_grad,
-            model.parameters()),
-        lr=0.01,
-        momentum=0.9,
-        weight_decay=5e-4)
+        # optimizer = optim.SGD(
+        # filter(
+        #     lambda p: p.requires_grad,
+        #     model.parameters()),
+        # lr=0.01,
+        # momentum=0.9,
+        # weight_decay=5e-4)
         scheduler = ReduceLROnPlateau(optimizer, factor = 0.1, patience = 5, mode = 'min')
 
         #-------------------- SETTINGS: LOSS

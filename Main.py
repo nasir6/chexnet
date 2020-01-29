@@ -9,8 +9,8 @@ from ChexnetTrainer import ChexnetTrainer
 
 def main ():
     
-    runTest()
-    # runTrain()
+    # runTest()
+    runTrain()
   
 #--------------------------------------------------------------------------------   
 
@@ -41,7 +41,7 @@ def runTrain():
     nnClassCount = 14
     
     #---- Training settings: batch size, maximum number of epochs
-    trBatchSize = 256
+    trBatchSize = 16
     trMaxEpoch = 100
     
     #---- Parameters related to image transforms: size of the down-scaled image, cropped image
