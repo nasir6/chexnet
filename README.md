@@ -28,8 +28,8 @@ implementation.
 
 ## Usage
 * Download the ChestX-ray14 database from [here](https://nihcc.app.box.com/v/ChestXray-NIHCC/folder/37178474737)
-* Unpack archives in separate directories (e.g. images_001.tar.gz into images_001)
-* Run **python Main.py** to run test using the pre-trained model (m-25012018-123527)
+* Unpack archives in separate directories copy all subdirectories images to database/xrays/images
+* Run **python Main.py** to run test/train by setting appropriate variables values
 * Use the **runTrain()** function in the **Main.py** to train a model from scratch
 
 This implementation allows to conduct experiments with 3 different densenet architectures: densenet-121, densenet-169 and
