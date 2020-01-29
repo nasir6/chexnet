@@ -25,7 +25,7 @@ def runTrain():
     timestampLaunch = timestampDate + '-' + timestampTime
     
     #---- Path to the directory with images
-    pathDirData = '/raid/mun/codes/data/xrays'
+    pathDirData = 'database/xrays'
     
     #---- Paths to the files with training, validation and testing sets.
     #---- Each file should contains pairs [path to image, output vector]
@@ -60,7 +60,7 @@ def runTrain():
 
 def runTest():
     
-    pathDirData = '/raid/mun/codes/data/xrays'
+    pathDirData = 'database/xrays'
     pathFileTest = 'test_list.txt'
     nnArchitecture = 'DENSE-NET-121'
     nnIsTrained = True

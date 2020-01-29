@@ -11,9 +11,20 @@ implementation.
 ![alt text](test/heatmap.png)
 
 ## Prerequisites
-* Python 3.5.2
+* set up conda env python 3.6
+
+        conda create -n chexnet python=3.6
+        conda activate chexnet
+
 * Pytorch
+
+        conda install pytorch==1.0.1 torchvision==0.2.2 cudatoolkit=9.0 -c pytorch
+
 * OpenCV (for generating CAMs)
+
+        conda install -c menpo opencv
+
+
 
 ## Usage
 * Download the ChestX-ray14 database from [here](https://nihcc.app.box.com/v/ChestXray-NIHCC/folder/37178474737)
