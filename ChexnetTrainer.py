@@ -21,7 +21,7 @@ from DensenetModels import DenseNet169
 from DensenetModels import DenseNet201
 from DatasetGenerator import DatasetGenerator
 from autoaugment import XRaysPolicy
-
+# from tqdm import tqdm
 
 #-------------------------------------------------------------------------------- 
 
@@ -48,7 +48,7 @@ class ChexnetTrainer ():
         elif nnArchitecture == 'DENSE-NET-169': model = DenseNet169(nnClassCount, nnIsTrained).cuda()
         elif nnArchitecture == 'DENSE-NET-201': model = DenseNet201(nnClassCount, nnIsTrained).cuda()
         
-        model = torch.nn.DataParallel(model).cuda()
+        # model = torch.nn.DataParallel(model).cuda()
                 
         #-------------------- SETTINGS: DATA TRANSFORMS
         normalize = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
@@ -127,11 +127,12 @@ class ChexnetTrainer ():
         
         for batchID, (input, target) in enumerate (dataLoader):
                         
-            target = target.cuda(async = True)
+            target = target.cuda()
+            input = input.cuda()
                  
             varInput = torch.autograd.Variable(input)
             varTarget = torch.autograd.Variable(target)         
-            varOutput = model(varInput)
+            varOutput = model(input)
             
             lossvalue = loss(varOutput, varTarget)
                        
@@ -139,7 +140,7 @@ class ChexnetTrainer ():
             lossvalue.backward()
             optimizer.step()
             if batchID % 10 == 9:
-                print(f"[{batchID:04}/{len(dataLoader)}]loss : {lossvalue.item()}")
+                print(f"[{batchID:04}/{len(dataLoader)}]    loss: {lossvalue.item():0.5f}")
             
     #-------------------------------------------------------------------------------- 
         
@@ -154,7 +155,8 @@ class ChexnetTrainer ():
         for i, (input_, target) in enumerate (dataLoader):
             with torch.no_grad():
             
-                target = target.cuda(async=True)
+                target = target.cuda()
+                input_ = input_.cuda()
                     
                 varInput = torch.autograd.Variable(input_)
                 varTarget = torch.autograd.Variable(target)    
