@@ -78,5 +78,4 @@ The highest accuracy 0.8779 was achieved by the model m-30012020-104001.pth.tar 
 | P Thickening  | 0.7936
 | Hernia        | 0.9383
 | AUROC mean    | 0.8779
-## Computation time
 
