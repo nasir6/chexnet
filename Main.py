@@ -9,8 +9,8 @@ from ChexnetTrainer import ChexnetTrainer
 
 def main ():
     
-    # runTest()
-    runTrain()
+    runTest()
+    # runTrain()
   
 #--------------------------------------------------------------------------------   
 
@@ -68,8 +68,8 @@ def runTest():
     trBatchSize = 16
     imgtransResize = 256
     imgtransCrop = 224
-    
-    pathModel = 'm-06012020-090102.pth.tar'
+    pathModel = 'm-30012020-104001.pth.tar'
+    # pathModel = 'm-06012020-090102.pth.tar'
     
     timestampLaunch = ''
     

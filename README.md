@@ -56,25 +56,27 @@ densenet-201.
 * To generate CAM of a test file run script HeatmapGenerator 
 
 ## Results
-The highest accuracy 0.8508 was achieved by the model m-25012018-123527 (see the models directory).
+The highest accuracy 0.8779 was achieved by the model m-30012020-104001.pth.tar (see the models directory).
+
 
 | Pathology     | AUROC         |
-| ------------- |:-------------:|
-| Atelectasis   | 0.8321        |
-| Cardiomegaly  | 0.9107        |
-| Effusion      | 0.8860        |
-| Infiltration  | 0.7145        |
-| Mass          | 0.8653        |
-| Nodule        | 0.8037        |
-| Pneumonia     | 0.7655        |
-| Pneumothorax  | 0.8857        |
-| Consolidation | 0.8157        |
-| Edema         | 0.9017        |
-| Emphysema     | 0.9422        |
-| Fibrosis      | 0.8523        |
-| P.T.          | 0.7948        |
-| Hernia        | 0.9416        |
+| ------------- |:-------------:
 
+| Atelectasis   | 0.8333
+| Cardiomegaly  | 0.9434
+| Effusion      | 0.7848
+| Infiltration  | 0.9050
+| Mass          | 0.8628
+| Nodule        | 0.9614
+| Pneumonia     | 0.9138
+| Pneumothorax  | 0.9857
+| Consolidation | 0.7665
+| Edema         | 0.9005
+| Emphysema     | 0.8514
+| Fibrosis      | 0.8507
+| P Thickening  | 0.7936
+| Hernia        | 0.9383
+| ------------- |:-------------:
+| AUROC mean    | 0.8779
 ## Computation time
-The training was done using single Tesla P100 GPU and took approximately 22h.
 
