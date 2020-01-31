@@ -1,10 +1,12 @@
+
 # CheXNet implementation in PyTorch
 
 Yet another PyTorch implementation of the [CheXNet](https://arxiv.org/abs/1711.05225) algorithm for pathology detection in 
 frontal chest X-ray images. This implementation is based on approach presented [here](https://github.com/arnoweng/CheXNet). Ten-crops 
 technique is used to transform images at the testing stage to get better accuracy. 
 
-The highest accuracy evaluated with AUROC was 0.8508 (see the model m-25012018-123527 in the models directory).
+The highest accuracy 0.8779 was achieved by the model m-30012020-104001.pth.tar (see the models directory). If you cannot download model weights download from [here](https://drive.google.com/file/d/1DMpGvBIwL3ND9A8GXxb1GovM01435oYQ/view?usp=sharing).
+
 The same training (70%), validation (10%) and testing (20%) datasets were used as in [this](https://github.com/arnoweng/CheXNet) 
 implementation.
 
@@ -59,9 +61,8 @@ densenet-201.
 The highest accuracy 0.8779 was achieved by the model m-30012020-104001.pth.tar (see the models directory). If you cannot download model weights download from [here](https://drive.google.com/file/d/1DMpGvBIwL3ND9A8GXxb1GovM01435oYQ/view?usp=sharing).
 
 
-| Pathology     | AUROC         |
+| Pathology     | AUROC        
 | ------------- |:-------------:
-
 | Atelectasis   | 0.8333
 | Cardiomegaly  | 0.9434
 | Effusion      | 0.7848
@@ -76,7 +77,6 @@ The highest accuracy 0.8779 was achieved by the model m-30012020-104001.pth.tar 
 | Fibrosis      | 0.8507
 | P Thickening  | 0.7936
 | Hernia        | 0.9383
-| ------------- |:-------------:
 | AUROC mean    | 0.8779
 ## Computation time
 
