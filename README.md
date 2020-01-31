@@ -56,7 +56,7 @@ densenet-201.
 * To generate CAM of a test file run script HeatmapGenerator 
 
 ## Results
-The highest accuracy 0.8779 was achieved by the model m-30012020-104001.pth.tar (see the models directory).
+The highest accuracy 0.8779 was achieved by the model m-30012020-104001.pth.tar (see the models directory). If you cannot download model weights download from [here](https://drive.google.com/file/d/1DMpGvBIwL3ND9A8GXxb1GovM01435oYQ/view?usp=sharing).
 
 
 | Pathology     | AUROC         |
