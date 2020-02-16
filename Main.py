@@ -9,8 +9,8 @@ from ChexnetTrainer import ChexnetTrainer
 
 def main ():
     
-    runTest()
-    # runTrain()
+    # runTest()
+    runTrain()
   
 #--------------------------------------------------------------------------------   
 
@@ -47,7 +47,7 @@ def runTrain():
     #---- Parameters related to image transforms: size of the down-scaled image, cropped image
     imgtransResize = 256
     imgtransCrop = 224
-    checkpoint = None#'m-31122019-030236.pth.tar'    
+    checkpoint = None#'m-02022020-173242.pth.tar'# None#'m-31122019-030236.pth.tar'    
     pathModel = 'm-' + timestampLaunch + '.pth.tar'
     
     print ('Training NN architecture = ', nnArchitecture)
@@ -68,8 +68,8 @@ def runTest():
     trBatchSize = 16
     imgtransResize = 256
     imgtransCrop = 224
-    pathModel = 'm-30012020-104001.pth.tar'
-    # pathModel = 'm-06012020-090102.pth.tar'
+    # pathModel = 'models/m-30012020-104001.pth.tar'
+    pathModel = 'm-03022020-101028.pth.tar'
     
     timestampLaunch = ''
     

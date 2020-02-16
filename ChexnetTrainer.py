@@ -22,9 +22,19 @@ from DensenetModels import DenseNet201
 from DatasetGenerator import DatasetGenerator
 from autoaugment import XRaysPolicy
 # from tqdm import tqdm
-
+from torch.nn.functional import kl_div, softmax, log_softmax
 #-------------------------------------------------------------------------------- 
+def get_uda_loss(preds1, preds2):
+    
+    tmp = 1.0
+    preds1 = softmax(preds1/tmp, dim=1).detach()
+    preds2 = log_softmax(preds2/tmp, dim=1)
+    
+    loss_kldiv = kl_div(preds2, preds1, reduction='none')
+    loss_kldiv = torch.sum(loss_kldiv, dim=1)
 
+    return torch.mean(loss_kldiv)
+    
 class ChexnetTrainer ():
 
     #---- Train the densenet network 
@@ -51,24 +61,32 @@ class ChexnetTrainer ():
         # model = torch.nn.DataParallel(model).cuda()
                 
         #-------------------- SETTINGS: DATA TRANSFORMS
+        
         normalize = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         
         transformList = []
         transformList.append(transforms.RandomResizedCrop(transCrop))
         transformList.append(transforms.RandomHorizontalFlip())
-        # with data augmentation
-        # transformList.append(XRaysPolicy())
-
         transformList.append(transforms.ToTensor())
         transformList.append(normalize)      
         transformSequence=transforms.Compose(transformList)
 
+        transform_only_aug = transforms.Compose([XRaysPolicy()])
+        transform_with_aug = transforms.Compose([
+            XRaysPolicy(),
+            transforms.RandomResizedCrop(transCrop),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize
+        ])
         #-------------------- SETTINGS: DATASET BUILDERS
-        datasetTrain = DatasetGenerator(pathDirData, pathFileTrain, transform=transformSequence)
+        datasetTrain = DatasetGenerator(pathDirData, pathFileTrain, transform=transform_with_aug)
+        datasetTrainUnsup = DatasetGenerator(pathDirData, pathFileTrain, transform=transformSequence, transform_aug=transform_only_aug)
         datasetVal =   DatasetGenerator(pathDirData, pathFileVal, transform=transformSequence)
               
-        dataLoaderTrain = DataLoader(dataset=datasetTrain, batch_size=trBatchSize, shuffle=True,  num_workers=24, pin_memory=True)
-        dataLoaderVal = DataLoader(dataset=datasetVal, batch_size=trBatchSize, shuffle=False, num_workers=24, pin_memory=True)
+        dataLoaderTrain = DataLoader(dataset=datasetTrain, batch_size=trBatchSize, shuffle=True,  num_workers=4, pin_memory=True)
+        dataLoaderUnsup = DataLoader(dataset=datasetTrainUnsup, batch_size=trBatchSize, shuffle=True,  num_workers=4, pin_memory=True)
+        dataLoaderVal = DataLoader(dataset=datasetVal, batch_size=trBatchSize, shuffle=False, num_workers=4, pin_memory=True)
         
         #-------------------- SETTINGS: OPTIMIZER & SCHEDULER
         optimizer = optim.Adam (model.parameters(), lr=0.0001, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
@@ -96,6 +114,7 @@ class ChexnetTrainer ():
         #---- TRAIN THE NETWORK
         
         lossMIN = 100000
+        max_auroc_mean = -1000
         
         for epochID in range (start_epoch, trMaxEpoch):
             
@@ -103,17 +122,20 @@ class ChexnetTrainer ():
             timestampDate = time.strftime("%d%m%Y")
             timestampSTART = timestampDate + '-' + timestampTime
                          
-            ChexnetTrainer.epochTrain (model, dataLoaderTrain, optimizer, scheduler, trMaxEpoch, nnClassCount, loss)
-            lossVal, losstensor = ChexnetTrainer.epochVal (model, dataLoaderVal, optimizer, scheduler, trMaxEpoch, nnClassCount, loss)
+            ChexnetTrainer.epochTrain (model, dataLoaderTrain, optimizer, scheduler, trMaxEpoch, nnClassCount, loss, dataLoaderUnsup)
+            lossVal, losstensor, aurocMean = ChexnetTrainer.epochVal (model, dataLoaderVal, optimizer, scheduler, trMaxEpoch, nnClassCount, loss)
             
             timestampTime = time.strftime("%H%M%S")
             timestampDate = time.strftime("%d%m%Y")
             timestampEND = timestampDate + '-' + timestampTime
             
             scheduler.step(losstensor.item())
-            
+            if aurocMean > max_auroc_mean:
+                max_auroc_mean = aurocMean   
+                print ('Epoch [' + str(epochID + 1) + '] [save] [' + timestampEND + '] aurocMean= ' + str(aurocMean))
+                torch.save({'epoch': epochID + 1, 'state_dict': model.state_dict(), 'max_suroc_mean': max_auroc_mean, 'optimizer' : optimizer.state_dict()}, 'm-' + launchTimestamp + '_best_auroc.pth.tar')
             if lossVal < lossMIN:
-                lossMIN = lossVal    
+                lossMIN = lossVal 
                 torch.save({'epoch': epochID + 1, 'state_dict': model.state_dict(), 'best_loss': lossMIN, 'optimizer' : optimizer.state_dict()}, 'm-' + launchTimestamp + '.pth.tar')
                 print ('Epoch [' + str(epochID + 1) + '] [save] [' + timestampEND + '] loss= ' + str(lossVal))
             else:
@@ -121,26 +143,47 @@ class ChexnetTrainer ():
                      
     #-------------------------------------------------------------------------------- 
        
-    def epochTrain (model, dataLoader, optimizer, scheduler, epochMax, classCount, loss):
-        
+    def epochTrain (model, dataLoader, optimizer, scheduler, epochMax, classCount, loss, unsup_loader):
+        unsup_ratio = 10
         model.train()
-        
-        for batchID, (input, target) in enumerate (dataLoader):
+        iter_u = iter(unsup_loader)
+
+        for batchID, (inputs, target) in enumerate (dataLoader):
+            l_data_len = len(target)
                         
-            target = target.cuda()
-            input = input.cuda()
-                 
-            varInput = torch.autograd.Variable(input)
-            varTarget = torch.autograd.Variable(target)         
-            varOutput = model(input)
             
-            lossvalue = loss(varOutput, varTarget)
-                       
+
+            try:
+                u_input_1, u_input_2 = next(iter_u)
+            except StopIteration:
+                iter_u = iter(self.unsup_loader)
+                u_input_1, u_input_2 = next(iter_u)
+
+            inputs = torch.cat([inputs, u_input_1, u_input_2])
+
+            target = target.cuda()
+            inputs = inputs.cuda()
+
+            varInput = torch.autograd.Variable(inputs)
+            varTarget = torch.autograd.Variable(target)         
+            varOutput = model(inputs)
+            
+            lossvalue = loss(varOutput[:l_data_len], varTarget)
+            
+            # uda loss
+            preds_unsup = varOutput[l_data_len:]
+            preds1, preds2 = torch.chunk(preds_unsup, 2)
+            loss_kl_div = get_uda_loss(preds1, preds2)
+            # import pdb; pdb.set_trace()
+            lossvalue = lossvalue + (unsup_ratio*loss_kl_div)
+            #
+
+
             optimizer.zero_grad()
             lossvalue.backward()
             optimizer.step()
             if batchID % 10 == 9:
-                print(f"[{batchID:04}/{len(dataLoader)}]    loss: {lossvalue.item():0.5f}")
+                print(f"[{batchID:04}/{len(dataLoader)}]    loss: {lossvalue.item():0.5f} loss kl: {unsup_ratio*loss_kl_div.item():0.5f}")
             
     #-------------------------------------------------------------------------------- 
         
@@ -152,16 +195,18 @@ class ChexnetTrainer ():
         lossValNorm = 0
         
         losstensorMean = 0
+        outGT = torch.FloatTensor().cuda()
+        outPRED = torch.FloatTensor().cuda()
         for i, (input_, target) in enumerate (dataLoader):
             with torch.no_grad():
             
                 target = target.cuda()
                 input_ = input_.cuda()
-                    
+                outGT = torch.cat((outGT, target), 0)
                 varInput = torch.autograd.Variable(input_)
                 varTarget = torch.autograd.Variable(target)    
                 varOutput = model(varInput)
-                
+                outPRED = torch.cat((outPRED, varOutput), 0)
                 losstensor = loss(varOutput, varTarget)
                 losstensorMean += losstensor
                 
@@ -171,7 +216,11 @@ class ChexnetTrainer ():
         outLoss = lossVal / lossValNorm
         losstensorMean = losstensorMean / lossValNorm
         
-        return outLoss, losstensorMean
+        aurocIndividual = ChexnetTrainer.computeAUROC(outGT, outPRED, classCount)
+        aurocMean = np.array(aurocIndividual).mean()
+        print ('AUROC mean ', aurocMean)
+
+        return outLoss, losstensorMean, aurocMean
                
     #--------------------------------------------------------------------------------     
      

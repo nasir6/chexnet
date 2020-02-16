@@ -13,7 +13,7 @@ class DatasetGenerator (Dataset):
     #-------------------------------------------------------------------------------- 
     
     
-    def __init__ (self, data_dir, pathDatasetFile, transform):
+    def __init__ (self, data_dir, pathDatasetFile, transform, transform_aug=None):
     
         self.listImagePaths = []
         self.listImageLabels = []
@@ -24,6 +24,7 @@ class DatasetGenerator (Dataset):
         
         self._split = pathDatasetFile
         self._construct_imdb()
+        self._transform_aug = transform_aug
     
     def _construct_imdb(self):
         """Constructs the imdb."""
@@ -90,10 +91,16 @@ class DatasetGenerator (Dataset):
 
         # imageLabel= torch.FloatTensor(self.listImageLabels[index])
         
-        if self.transform != None: imageData = self.transform(imageData)
-        
-        return imageData, imageLabel
-        
+        # if self.transform != None: imageData = self.transform(imageData)
+        img1 = self.transform(imageData)
+        if self._transform_aug is not None:
+            img2 = self.transform(self._transform_aug(imageData))
+            # img2 = self.transform_cutout(img2)
+        if self._transform_aug is not None:
+            return img1, img2
+        else:
+            return img1, imageLabel
+
     #-------------------------------------------------------------------------------- 
     
     def __len__(self):
