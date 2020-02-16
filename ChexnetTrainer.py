@@ -144,7 +144,7 @@ class ChexnetTrainer ():
     #-------------------------------------------------------------------------------- 
        
     def epochTrain (model, dataLoader, optimizer, scheduler, epochMax, classCount, loss, unsup_loader):
-        unsup_ratio = 10
+        unsup_ratio = 0
         model.train()
         iter_u = iter(unsup_loader)
 
@@ -153,13 +153,13 @@ class ChexnetTrainer ():
                         
             
 
-            try:
-                u_input_1, u_input_2 = next(iter_u)
-            except StopIteration:
-                iter_u = iter(self.unsup_loader)
-                u_input_1, u_input_2 = next(iter_u)
+            # try:
+            #     u_input_1, u_input_2 = next(iter_u)
+            # except StopIteration:
+            #     iter_u = iter(self.unsup_loader)
+            #     u_input_1, u_input_2 = next(iter_u)
 
-            inputs = torch.cat([inputs, u_input_1, u_input_2])
+            # inputs = torch.cat([inputs, u_input_1, u_input_2])
 
             target = target.cuda()
             inputs = inputs.cuda()
@@ -171,11 +171,10 @@ class ChexnetTrainer ():
             lossvalue = loss(varOutput[:l_data_len], varTarget)
             
             # uda loss
-            preds_unsup = varOutput[l_data_len:]
-            preds1, preds2 = torch.chunk(preds_unsup, 2)
-            loss_kl_div = get_uda_loss(preds1, preds2)
-            # import pdb; pdb.set_trace()
-            lossvalue = lossvalue + (unsup_ratio*loss_kl_div)
+            # preds_unsup = varOutput[l_data_len:]
+            # preds1, preds2 = torch.chunk(preds_unsup, 2)
+            # loss_kl_div = get_uda_loss(preds1, preds2)
+            # lossvalue = lossvalue + (unsup_ratio*loss_kl_div)
             #
 
 
@@ -183,7 +182,8 @@ class ChexnetTrainer ():
             lossvalue.backward()
             optimizer.step()
             if batchID % 10 == 9:
-                print(f"[{batchID:04}/{len(dataLoader)}]    loss: {lossvalue.item():0.5f} loss kl: {unsup_ratio*loss_kl_div.item():0.5f}")
+                print(f"[{batchID:04}/{len(dataLoader)}]    loss: {lossvalue.item():0.5f}")
+                #  loss kl: {unsup_ratio*loss_kl_div.item():0.5f}
             
     #-------------------------------------------------------------------------------- 
         
