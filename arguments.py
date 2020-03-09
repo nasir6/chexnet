@@ -1,7 +1,10 @@
 import argparse
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--architecture', default='DenseNet121', help='model arch, opts: [DenseNet121, DenseNet169, DenseNet201]')
+    parser.add_argument(
+        '--architecture', default='DenseNet121', 
+        help='model arch, opts: [DenseNet121, DenseNet169, DenseNet201]'
+    )
     parser.add_argument('--data_root', default='database/xrays', help='dataset directory path')
     parser.add_argument('--file_train', default='new_split/train_sup.txt', help='file containing supervised train list')
     parser.add_argument('--file_train_unsup', default='new_split/train_unsup.txt', help='file containing unsupervised train list')
