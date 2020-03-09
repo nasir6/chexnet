@@ -2,7 +2,7 @@ import os
 import numpy as np
 import time
 import sys
-
+import datetime
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
@@ -16,56 +16,56 @@ import torch.nn.functional as func
 
 from sklearn.metrics.ranking import roc_auc_score
 
-from DensenetModels import DenseNet121
-from DensenetModels import DenseNet169
-from DensenetModels import DenseNet201
+from DensenetModels import DenseNet121, DenseNet169, DenseNet201
 from DatasetGenerator import DatasetGenerator
 from autoaugment import XRaysPolicy
 # from tqdm import tqdm
 from torch.nn.functional import kl_div, softmax, log_softmax
-#-------------------------------------------------------------------------------- 
-def get_uda_loss(preds1, preds2):
-    
-    tmp = 1.0
-    preds1 = softmax(preds1/tmp, dim=1).detach()
-    preds2 = log_softmax(preds2/tmp, dim=1)
-    
-    loss_kldiv = kl_div(preds2, preds1, reduction='none')
-    loss_kldiv = torch.sum(loss_kldiv, dim=1)
 
-    return torch.mean(loss_kldiv)
+model_map = {
+    'DenseNet121': DenseNet121,
+    'DenseNet169': DenseNet169,
+    'DenseNet201': DenseNet201 
+}
+#-------------------------------------------------------------------------------- 
     
 class ChexnetTrainer ():
+    def __init__(self, args):
+        self.args = args
 
-    #---- Train the densenet network 
-    #---- pathDirData - path to the directory that contains images
-    #---- pathFileTrain - path to the file that contains image paths and label pairs (training set)
-    #---- pathFileVal - path to the file that contains image path and label pairs (validation set)
-    #---- nnArchitecture - model architecture 'DENSE-NET-121', 'DENSE-NET-169' or 'DENSE-NET-201'
-    #---- nnIsTrained - if True, uses pre-trained version of the network (pre-trained on imagenet)
-    #---- nnClassCount - number of output classes 
-    #---- trBatchSize - batch size
-    #---- trMaxEpoch - number of epochs
-    #---- transResize - size of the image to scale down to (not used in current implementation)
-    #---- transCrop - size of the cropped image 
-    #---- launchTimestamp - date/time, used to assign unique name for the checkpoint file
-    #---- checkpoint - if not None loads the model and continues training
-    
-    def train (pathDirData, pathFileTrain, pathFileVal, nnArchitecture, nnIsTrained, nnClassCount, trBatchSize, trMaxEpoch, transResize, transCrop, launchTimestamp, checkpoint):
+        # init model
+        
+        self.model = model_map[self.args.architecture](self.args.num_classes, self.args.pretrained)
 
-        #-------------------- SETTINGS: NETWORK ARCHITECTURE
-        if nnArchitecture == 'DENSE-NET-121': model = DenseNet121(nnClassCount, nnIsTrained).cuda()
-        elif nnArchitecture == 'DENSE-NET-169': model = DenseNet169(nnClassCount, nnIsTrained).cuda()
-        elif nnArchitecture == 'DENSE-NET-201': model = DenseNet201(nnClassCount, nnIsTrained).cuda()
-        
-        # model = torch.nn.DataParallel(model).cuda()
-                
-        #-------------------- SETTINGS: DATA TRANSFORMS
-        
+        # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+        # if torch.cuda.device_count() > 1:
+        #     self.model = nn.DataParallel(self.model)
+        #     self.args.batch_size*=torch.cuda.device_count()
+        #     self.args.unsup_batch_size*=torch.cuda.device_count()
+        #     print(f"using {torch.cuda.device_count()} GPUs! with {self.args.batch_size} batch_size")
+        #     # self.args.lr = 0.1 * (self.args.batch_size/256)
+        #     print(f"updated learning rate {self.args.lr}")
+        #     # torch.cuda.device_count()
+
+
+        self.model = self.model.cuda()
+            
+        # 0.0001
+        self.optimizer = optim.Adam (self.model.parameters(), lr=self.args.lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
+        self.scheduler = ReduceLROnPlateau(self.optimizer, factor = 0.1, patience = 5, mode = 'min')
+        self.criterion = torch.nn.BCELoss(reduction='mean')
+
+        self.start_epoch = 0
+
+        self.load_checkpoint(args.checkpoint)
+        self.initDataLoaders()
+
+    def initDataLoaders(self):
         normalize = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         
         transformList = []
-        transformList.append(transforms.RandomResizedCrop(transCrop))
+        transformList.append(transforms.RandomResizedCrop(self.args.crop_resize))
         transformList.append(transforms.RandomHorizontalFlip())
         transformList.append(transforms.ToTensor())
         transformList.append(normalize)      
@@ -74,122 +74,142 @@ class ChexnetTrainer ():
         transform_only_aug = transforms.Compose([XRaysPolicy()])
         transform_with_aug = transforms.Compose([
             XRaysPolicy(),
-            transforms.RandomResizedCrop(transCrop),
+            transforms.RandomResizedCrop(self.args.crop_resize),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             normalize
         ])
-        #-------------------- SETTINGS: DATASET BUILDERS
-        datasetTrain = DatasetGenerator(pathDirData, pathFileTrain, transform=transform_with_aug)
-        datasetTrainUnsup = DatasetGenerator(pathDirData, pathFileTrain, transform=transformSequence, transform_aug=transform_only_aug)
-        datasetVal =   DatasetGenerator(pathDirData, pathFileVal, transform=transformSequence)
+
+        test_transformSequence = transforms.Compose([
+                transforms.Resize(self.args.resize),
+                transforms.TenCrop(self.args.crop_resize),
+                transforms.Lambda(lambda crops: torch.stack([transforms.ToTensor()(crop) for crop in crops])),
+                transforms.Lambda(lambda crops: torch.stack([normalize(crop) for crop in crops])) 
+            ])
+        
+        datasetTest = DatasetGenerator(self.args.data_root, self.args.file_test, transform=test_transformSequence)
+        self.dataLoaderTest = DataLoader(dataset=datasetTest, batch_size=self.args.batch_size, num_workers=self.args.num_workers, shuffle=False )
+        
+        datasetTrain = DatasetGenerator(self.args.data_root, self.args.file_train, transform=transform_with_aug)
+        datasetTrainUnsup = DatasetGenerator(self.args.data_root, self.args.file_train_unsup, transform=transformSequence, transform_aug=transform_only_aug)
+        datasetVal =   DatasetGenerator(self.args.data_root, self.args.file_val, transform=transformSequence)
               
-        dataLoaderTrain = DataLoader(dataset=datasetTrain, batch_size=trBatchSize, shuffle=True,  num_workers=4, pin_memory=True)
-        dataLoaderUnsup = DataLoader(dataset=datasetTrainUnsup, batch_size=trBatchSize, shuffle=True,  num_workers=4, pin_memory=True)
-        dataLoaderVal = DataLoader(dataset=datasetVal, batch_size=trBatchSize, shuffle=False, num_workers=4, pin_memory=True)
+        self.dataLoaderTrainSup = DataLoader(dataset=datasetTrain, batch_size=self.args.batch_size, shuffle=True,  num_workers=self.args.num_workers )
+        self.dataLoaderUnsup = DataLoader(dataset=datasetTrainUnsup, batch_size=self.args.unsup_batch_size, shuffle=True,  num_workers=self.args.num_workers )
+        self.dataLoaderVal = DataLoader(dataset=datasetVal, batch_size=self.args.batch_size, shuffle=False, num_workers=self.args.num_workers )
         
-        #-------------------- SETTINGS: OPTIMIZER & SCHEDULER
-        optimizer = optim.Adam (model.parameters(), lr=0.0001, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
-
-        # optimizer = optim.SGD(
-        # filter(
-        #     lambda p: p.requires_grad,
-        #     model.parameters()),
-        # lr=0.01,
-        # momentum=0.9,
-        # weight_decay=5e-4)
-        scheduler = ReduceLROnPlateau(optimizer, factor = 0.1, patience = 5, mode = 'min')
-
-        #-------------------- SETTINGS: LOSS
-        loss = torch.nn.BCELoss(size_average = True)
+    def get_uda_loss(self, preds1, preds2):
+    
+        tmp = self.args.uda_temp
+        preds1 = softmax(preds1/tmp, dim=1).detach()
+        preds2 = log_softmax(preds2/tmp, dim=1)
         
-        #---- Load checkpoint 
-        start_epoch = 0
+        loss_kldiv = kl_div(preds2, preds1, reduction='none')
+        loss_kldiv = torch.sum(loss_kldiv, dim=1)
+
+        return torch.mean(loss_kldiv)
+
+    def load_checkpoint(self, checkpoint):
         if checkpoint != None:
             modelCheckpoint = torch.load(checkpoint)
-            model.load_state_dict(modelCheckpoint['state_dict'])
-            optimizer.load_state_dict(modelCheckpoint['optimizer'])
-            start_epoch = modelCheckpoint['epoch']
-        
+            self.model.load_state_dict(modelCheckpoint['state_dict'])
+            self.optimizer.load_state_dict(modelCheckpoint['optimizer'])
+            self.start_epoch = modelCheckpoint['epoch']
+            print(f"loaded epoch {self.start_epoch} from {checkpoint} \n")
+    def train (self):        
+
         #---- TRAIN THE NETWORK
         
         lossMIN = 100000
         max_auroc_mean = -1000
         
-        for epochID in range (start_epoch, trMaxEpoch):
-            
-            timestampTime = time.strftime("%H%M%S")
-            timestampDate = time.strftime("%d%m%Y")
-            timestampSTART = timestampDate + '-' + timestampTime
+        for epochID in range (self.start_epoch, self.args.epochs):
                          
-            ChexnetTrainer.epochTrain (model, dataLoaderTrain, optimizer, scheduler, trMaxEpoch, nnClassCount, loss, dataLoaderUnsup)
-            lossVal, losstensor, aurocMean = ChexnetTrainer.epochVal (model, dataLoaderVal, optimizer, scheduler, trMaxEpoch, nnClassCount, loss)
+            self.epochTrain()
+
+            lossVal, losstensor, aurocMean = self.epochVal()
             
-            timestampTime = time.strftime("%H%M%S")
-            timestampDate = time.strftime("%d%m%Y")
-            timestampEND = timestampDate + '-' + timestampTime
-            
-            scheduler.step(losstensor.item())
+            self.scheduler.step(losstensor.item())
             if aurocMean > max_auroc_mean:
-                max_auroc_mean = aurocMean   
-                print ('Epoch [' + str(epochID + 1) + '] [save] [' + timestampEND + '] aurocMean= ' + str(aurocMean))
-                torch.save({'epoch': epochID + 1, 'state_dict': model.state_dict(), 'max_suroc_mean': max_auroc_mean, 'optimizer' : optimizer.state_dict()}, 'm-' + launchTimestamp + '_best_auroc.pth.tar')
+                max_auroc_mean = aurocMean
+                print(f"{datetime.datetime.now()} --- \t Epoch [{epochID + 1}] [save] AUROC mean: {aurocMean:0.4f} loss: {lossVal:0.6f}")
+                torch.save({'epoch': epochID + 1, 'state_dict': self.model.state_dict(), 'max_suroc_mean': max_auroc_mean, 'optimizer' : self.optimizer.state_dict()}, f'{self.args.save_dir}/best_auroc.pth.tar')
             if lossVal < lossMIN:
                 lossMIN = lossVal 
-                torch.save({'epoch': epochID + 1, 'state_dict': model.state_dict(), 'best_loss': lossMIN, 'optimizer' : optimizer.state_dict()}, 'm-' + launchTimestamp + '.pth.tar')
-                print ('Epoch [' + str(epochID + 1) + '] [save] [' + timestampEND + '] loss= ' + str(lossVal))
+                torch.save({'epoch': epochID + 1, 'state_dict': self.model.state_dict(), 'best_loss': lossMIN, 'optimizer' : self.optimizer.state_dict()}, f'{self.args.save_dir}/min_loss.pth.tar')
+                print(f"{datetime.datetime.now()} --- \t Epoch [{epochID + 1}] [save] AUROC mean: {aurocMean:0.4f} loss: {lossVal:0.6f}")
             else:
-                print ('Epoch [' + str(epochID + 1) + '] [----] [' + timestampEND + '] loss= ' + str(lossVal))
+                print(f"{datetime.datetime.now()} --- \t Epoch [{epochID + 1}] [----] AUROC mean: {aurocMean:0.4f} loss: {lossVal:0.6f}")
                      
     #-------------------------------------------------------------------------------- 
        
-    def epochTrain (model, dataLoader, optimizer, scheduler, epochMax, classCount, loss, unsup_loader):
-        unsup_ratio = 10
-        model.train()
-        iter_u = iter(unsup_loader)
+    def epochTrain (self):
+        # unsup_ratio = 10
+        self.model.train()
+        iter_u = iter(self.dataLoaderUnsup)
 
-        for batchID, (inputs, target) in enumerate (dataLoader):
-            l_data_len = len(target)
-                        
+        for batchID, (inputs, target) in enumerate (self.dataLoaderTrainSup):
+            
+                # l_data_len = len(target)
+            
             
 
-            try:
-                u_input_1, u_input_2 = next(iter_u)
-            except StopIteration:
-                iter_u = iter(self.unsup_loader)
-                u_input_1, u_input_2 = next(iter_u)
-
-            inputs = torch.cat([inputs, u_input_1, u_input_2])
+            # inputs = torch.cat([inputs, u_input_1, u_input_2])
 
             target = target.cuda()
             inputs = inputs.cuda()
 
-            varInput = torch.autograd.Variable(inputs)
-            varTarget = torch.autograd.Variable(target)         
-            varOutput = model(inputs)
+            # varInput = torch.autograd.Variable(inputs)
+            # varTarget = torch.autograd.Variable(target)         
+            varOutput = self.model(inputs)
+            # .data.cpu()
             
-            lossvalue = loss(varOutput[:l_data_len], varTarget)
+            lossvalue = self.criterion(varOutput, target)
             
             # -------------------------uda loss
-            preds_unsup = varOutput[l_data_len:]
-            preds1, preds2 = torch.chunk(preds_unsup, 2)
-            loss_kl_div = get_uda_loss(preds1, preds2)
-            lossvalue = lossvalue + (unsup_ratio*loss_kl_div)
+            # preds_unsup = varOutput[l_data_len:]
+            # preds1, preds2 = torch.chunk(preds_unsup, 2)
+            if self.args.uda:
+                try:
+                    u_input_1, u_input_2 = next(iter_u)
+                except StopIteration:
+                    iter_u = iter(self.dataLoaderUnsup)
+                    u_input_1, u_input_2 = next(iter_u)
+                
+                # import pdb; pdb.set_trace()
+                preds1 = self.model(u_input_1.cuda())
+                # .data.cpu()
+                preds2 = self.model(u_input_2.cuda())
+                # .data.cpu()
+
+                loss_kl_div = self.args.unsup_ratio*self.get_uda_loss(preds1, preds2)
+                lossvalue = lossvalue + loss_kl_div
             #--------------------------
 
 
-            optimizer.zero_grad()
+            self.optimizer.zero_grad()
             lossvalue.backward()
-            optimizer.step()
+            self.optimizer.step()
             if batchID % 10 == 9:
-                print(f"[{batchID:04}/{len(dataLoader)}]    loss: {lossvalue.item():0.5f}")
-                #  loss kl: {unsup_ratio*loss_kl_div.item():0.5f}
-            
+                print(f"{datetime.datetime.now()} --- \t [{batchID:04}/{len(self.dataLoaderTrainSup)}] loss: {lossvalue.item():0.5f} loss UDA: {loss_kl_div.item() if self.args.uda else 0 :0.5f}")
+            # else:
+            #     target = target.cuda()
+            #     inputs = inputs.cuda()
+            #     # varInput = torch.autograd.Variable(inputs)
+            #     # varTarget = torch.autograd.Variable(target)    
+            #     varOutput = self.model(inputs)
+            #     lossvalue = self.criterion(varOutput, varTarget)
+            #     self.optimizer.zero_grad()
+            #     lossvalue.backward()
+            #     self.optimizer.step()
+            #     if batchID % 10 == 9:
+            #         print(f"{datetime.datetime.now()} --- \t [{batchID:04}/{len(self.dataLoaderTrainSup)}] loss: {lossvalue.item():0.5f}")
+                
     #-------------------------------------------------------------------------------- 
         
-    def epochVal (model, dataLoader, optimizer, scheduler, epochMax, classCount, loss):
+    def epochVal (self):
         
-        model.eval ()
+        self.model.eval ()
         
         lossVal = 0
         lossValNorm = 0
@@ -197,7 +217,7 @@ class ChexnetTrainer ():
         losstensorMean = 0
         outGT = torch.FloatTensor().cuda()
         outPRED = torch.FloatTensor().cuda()
-        for i, (input_, target) in enumerate (dataLoader):
+        for i, (input_, target) in enumerate (self.dataLoaderVal):
             with torch.no_grad():
             
                 target = target.cuda()
@@ -205,9 +225,9 @@ class ChexnetTrainer ():
                 outGT = torch.cat((outGT, target), 0)
                 varInput = torch.autograd.Variable(input_)
                 varTarget = torch.autograd.Variable(target)    
-                varOutput = model(varInput)
+                varOutput = self.model(varInput)
                 outPRED = torch.cat((outPRED, varOutput), 0)
-                losstensor = loss(varOutput, varTarget)
+                losstensor = self.criterion(varOutput, varTarget)
                 losstensorMean += losstensor
                 
                 lossVal += losstensor.item()
@@ -216,49 +236,29 @@ class ChexnetTrainer ():
         outLoss = lossVal / lossValNorm
         losstensorMean = losstensorMean / lossValNorm
         
-        aurocIndividual = ChexnetTrainer.computeAUROC(outGT, outPRED, classCount)
+        aurocIndividual = self.computeAUROC(outGT, outPRED)
         aurocMean = np.array(aurocIndividual).mean()
-        print ('AUROC mean ', aurocMean)
+        print (f'{datetime.datetime.now()} --- \t Val AUROC mean: {aurocMean}')
 
         return outLoss, losstensorMean, aurocMean
                
-    #--------------------------------------------------------------------------------     
-     
-    #---- Computes area under ROC curve 
-    #---- dataGT - ground truth data
-    #---- dataPRED - predicted data
-    #---- classCount - number of classes
+    #--------------------------------------------------------------------------------
     
-    def computeAUROC (dataGT, dataPRED, classCount):
+    def computeAUROC (self, dataGT, dataPRED):
         
         outAUROC = []
         
         datanpGT = dataGT.cpu().numpy()
         datanpPRED = dataPRED.cpu().numpy()
         
-        for i in range(classCount):
+        for i in range(self.args.num_classes):
             outAUROC.append(roc_auc_score(datanpGT[:, i], datanpPRED[:, i]))
-            
         return outAUROC
         
         
     #--------------------------------------------------------------------------------  
     
-    #---- Test the trained network 
-    #---- pathDirData - path to the directory that contains images
-    #---- pathFileTrain - path to the file that contains image paths and label pairs (training set)
-    #---- pathFileVal - path to the file that contains image path and label pairs (validation set)
-    #---- nnArchitecture - model architecture 'DENSE-NET-121', 'DENSE-NET-169' or 'DENSE-NET-201'
-    #---- nnIsTrained - if True, uses pre-trained version of the network (pre-trained on imagenet)
-    #---- nnClassCount - number of output classes 
-    #---- trBatchSize - batch size
-    #---- trMaxEpoch - number of epochs
-    #---- transResize - size of the image to scale down to (not used in current implementation)
-    #---- transCrop - size of the cropped image 
-    #---- launchTimestamp - date/time, used to assign unique name for the checkpoint file
-    #---- checkpoint - if not None loads the model and continues training
-    
-    def test (pathDirData, pathFileTest, pathModel, nnArchitecture, nnClassCount, nnIsTrained, trBatchSize, transResize, transCrop, launchTimeStamp):   
+    def test (self):   
         
         
         CLASS_NAMES = [ 'Atelectasis', 'Cardiomegaly', 'Effusion', 'Infiltration', 'Mass', 'Nodule', 'Pneumonia',
@@ -266,36 +266,12 @@ class ChexnetTrainer ():
         
         cudnn.benchmark = True
         
-        #-------------------- SETTINGS: NETWORK ARCHITECTURE, MODEL LOAD
-        if nnArchitecture == 'DENSE-NET-121': model = DenseNet121(nnClassCount, nnIsTrained).cuda()
-        elif nnArchitecture == 'DENSE-NET-169': model = DenseNet169(nnClassCount, nnIsTrained).cuda()
-        elif nnArchitecture == 'DENSE-NET-201': model = DenseNet201(nnClassCount, nnIsTrained).cuda()
-        
-        # model = torch.nn.DataParallel(model).cuda() 
-        
-        modelCheckpoint = torch.load(pathModel)
-        model.load_state_dict(modelCheckpoint['state_dict'])
-
-        #-------------------- SETTINGS: DATA TRANSFORMS, TEN CROPS
-        normalize = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        
-        #-------------------- SETTINGS: DATASET BUILDERS
-        transformList = []
-        transformList.append(transforms.Resize(transResize))
-        transformList.append(transforms.TenCrop(transCrop))
-        transformList.append(transforms.Lambda(lambda crops: torch.stack([transforms.ToTensor()(crop) for crop in crops])))
-        transformList.append(transforms.Lambda(lambda crops: torch.stack([normalize(crop) for crop in crops])))
-        transformSequence=transforms.Compose(transformList)
-        
-        datasetTest = DatasetGenerator(pathDirData, pathFileTest, transform=transformSequence)
-        dataLoaderTest = DataLoader(dataset=datasetTest, batch_size=trBatchSize, num_workers=8, shuffle=False, pin_memory=True)
-        
         outGT = torch.FloatTensor().cuda()
         outPRED = torch.FloatTensor().cuda()
        
-        model.eval()
+        self.model.eval()
         
-        for i, (input, target) in enumerate(dataLoaderTest):
+        for i, (input, target) in enumerate(self.dataLoaderTest):
             with torch.no_grad():
                 target = target.cuda()
                 outGT = torch.cat((outGT, target), 0)
@@ -304,24 +280,21 @@ class ChexnetTrainer ():
                 
                 varInput = torch.autograd.Variable(input.view(-1, c, h, w).cuda())
                 
-                out = model(varInput)
+                out = self.model(varInput)
                 outMean = out.view(bs, n_crops, -1).mean(1)
                 
                 outPRED = torch.cat((outPRED, outMean.data), 0)
                 # del varOutput, varTarget, varInput, target, input_
 
 
-        aurocIndividual = ChexnetTrainer.computeAUROC(outGT, outPRED, nnClassCount)
+        aurocIndividual = self.computeAUROC(outGT, outPRED)
         aurocMean = np.array(aurocIndividual).mean()
         
-        print ('AUROC mean ', aurocMean)
+        print ('Test AUROC mean ', aurocMean)
         
         for i in range (0, len(aurocIndividual)):
             print (CLASS_NAMES[i], ' ', aurocIndividual[i])
-        
-     
         return
-#-------------------------------------------------------------------------------- 
 
 
 

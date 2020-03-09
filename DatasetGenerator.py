@@ -32,7 +32,6 @@ class DatasetGenerator (Dataset):
         
         data_entry_file = 'Data_Entry_2017.csv'
         split_path = os.path.join(self._data_path, self._split)
-        print(f'{self._split} data path: {split_path}')
         with open(split_path, 'r') as f: file_names = f.readlines()
         split_file_names = np.array([file_name.strip().split(' ')[0] for file_name in file_names])
         df = pd.read_csv(f'{self._data_path}/{data_entry_file}')
@@ -70,8 +69,8 @@ class DatasetGenerator (Dataset):
                 'im_path': os.path.join(im_dir, image_index[index]),
                 'labels': class_ids,
             })
-        print(f'Number of images: {len(self._imdb)}')
-        print(f'Number of classes: {len(self._class_ids)}')
+
+        print(f'Number of images: {len(self._imdb)} with {len(self._class_ids)} class labels from file path {split_path} \n')
 
 
     
