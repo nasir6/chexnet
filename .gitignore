@@ -1,2 +1,4 @@
 *.tar
+__pycache__/*
+logs/*
 database/xrays/images/*

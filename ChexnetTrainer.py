@@ -90,7 +90,11 @@ class ChexnetTrainer ():
         datasetTest = DatasetGenerator(self.args.data_root, self.args.file_test, transform=test_transformSequence)
         self.dataLoaderTest = DataLoader(dataset=datasetTest, batch_size=self.args.batch_size, num_workers=self.args.num_workers, shuffle=False )
         
-        datasetTrain = DatasetGenerator(self.args.data_root, self.args.file_train, transform=transform_with_aug)
+        datasetTrain = DatasetGenerator(self.args.data_root, self.args.file_train, transform=transformSequence)
+        if self.args.uda:
+            datasetTrain = DatasetGenerator(self.args.data_root, self.args.file_train, transform=transform_with_aug)
+
+
         datasetTrainUnsup = DatasetGenerator(self.args.data_root, self.args.file_train_unsup, transform=transformSequence, transform_aug=transform_only_aug)
         datasetVal =   DatasetGenerator(self.args.data_root, self.args.file_val, transform=transformSequence)
               
@@ -122,10 +126,11 @@ class ChexnetTrainer ():
         
         lossMIN = 100000
         max_auroc_mean = -1000
+        self.iter_u = iter(self.dataLoaderUnsup)
         
         for epochID in range (self.start_epoch, self.args.epochs):
                          
-            self.epochTrain()
+            self.epochTrain(epochID)
 
             lossVal, losstensor, aurocMean = self.epochVal()
             
@@ -143,81 +148,40 @@ class ChexnetTrainer ():
                      
     #-------------------------------------------------------------------------------- 
        
-    def epochTrain (self):
-        # unsup_ratio = 10
+    def epochTrain (self, epochID):
         self.model.train()
-        iter_u = iter(self.dataLoaderUnsup)
-
+        uda_epoch = 20
         for batchID, (inputs, target) in enumerate (self.dataLoaderTrainSup):
-            
-                # l_data_len = len(target)
-            
-            
-
-            # inputs = torch.cat([inputs, u_input_1, u_input_2])
-
             target = target.cuda()
             inputs = inputs.cuda()
-
-            # varInput = torch.autograd.Variable(inputs)
-            # varTarget = torch.autograd.Variable(target)         
             varOutput = self.model(inputs)
-            # .data.cpu()
-            
             lossvalue = self.criterion(varOutput, target)
-            
-            # -------------------------uda loss
-            # preds_unsup = varOutput[l_data_len:]
-            # preds1, preds2 = torch.chunk(preds_unsup, 2)
-            if self.args.uda:
+            if self.args.uda and epochID > uda_epoch:
                 try:
-                    u_input_1, u_input_2 = next(iter_u)
+                    u_input_1, u_input_2 = next(self.iter_u)
                 except StopIteration:
-                    iter_u = iter(self.dataLoaderUnsup)
-                    u_input_1, u_input_2 = next(iter_u)
-                
-                # import pdb; pdb.set_trace()
+                    self.iter_u = iter(self.dataLoaderUnsup)
+                    u_input_1, u_input_2 = next(self.iter_u)
                 preds1 = self.model(u_input_1.cuda())
-                # .data.cpu()
                 preds2 = self.model(u_input_2.cuda())
-                # .data.cpu()
-
                 loss_kl_div = self.args.unsup_ratio*self.get_uda_loss(preds1, preds2)
                 lossvalue = lossvalue + loss_kl_div
-            #--------------------------
-
 
             self.optimizer.zero_grad()
             lossvalue.backward()
             self.optimizer.step()
             if batchID % 10 == 9:
-                print(f"{datetime.datetime.now()} --- \t [{batchID:04}/{len(self.dataLoaderTrainSup)}] loss: {lossvalue.item():0.5f} loss UDA: {loss_kl_div.item() if self.args.uda else 0 :0.5f}")
-            # else:
-            #     target = target.cuda()
-            #     inputs = inputs.cuda()
-            #     # varInput = torch.autograd.Variable(inputs)
-            #     # varTarget = torch.autograd.Variable(target)    
-            #     varOutput = self.model(inputs)
-            #     lossvalue = self.criterion(varOutput, varTarget)
-            #     self.optimizer.zero_grad()
-            #     lossvalue.backward()
-            #     self.optimizer.step()
-            #     if batchID % 10 == 9:
-            #         print(f"{datetime.datetime.now()} --- \t [{batchID:04}/{len(self.dataLoaderTrainSup)}] loss: {lossvalue.item():0.5f}")
-                
-    #-------------------------------------------------------------------------------- 
+                print(f"{datetime.datetime.now()} --- \t [{batchID:04}/{len(self.dataLoaderTrainSup)}] loss: {lossvalue.item():0.5f} loss UDA: {loss_kl_div.item() if self.args.uda and epochID > uda_epoch else 0 :0.5f}")    
         
-    def epochVal (self):
-        
-        self.model.eval ()
-        
+    def epochVal(self):   
+        self.model.eval()
         lossVal = 0
         lossValNorm = 0
         
         losstensorMean = 0
         outGT = torch.FloatTensor().cuda()
         outPRED = torch.FloatTensor().cuda()
-        for i, (input_, target) in enumerate (self.dataLoaderVal):
+        for i, (input_, target) in enumerate(self.dataLoaderVal):
             with torch.no_grad():
             
                 target = target.cuda()
@@ -244,54 +208,37 @@ class ChexnetTrainer ():
                
     #--------------------------------------------------------------------------------
     
-    def computeAUROC (self, dataGT, dataPRED):
+    def computeAUROC(self, dataGT, dataPRED):
         
         outAUROC = []
-        
         datanpGT = dataGT.cpu().numpy()
         datanpPRED = dataPRED.cpu().numpy()
-        
         for i in range(self.args.num_classes):
             outAUROC.append(roc_auc_score(datanpGT[:, i], datanpPRED[:, i]))
         return outAUROC
         
-        
     #--------------------------------------------------------------------------------  
     
-    def test (self):   
-        
-        
+    def test (self):
         CLASS_NAMES = [ 'Atelectasis', 'Cardiomegaly', 'Effusion', 'Infiltration', 'Mass', 'Nodule', 'Pneumonia',
                 'Pneumothorax', 'Consolidation', 'Edema', 'Emphysema', 'Fibrosis', 'Pleural_Thickening', 'Hernia']
         
         cudnn.benchmark = True
-        
         outGT = torch.FloatTensor().cuda()
         outPRED = torch.FloatTensor().cuda()
-       
         self.model.eval()
-        
         for i, (input, target) in enumerate(self.dataLoaderTest):
             with torch.no_grad():
                 target = target.cuda()
                 outGT = torch.cat((outGT, target), 0)
-                
                 bs, n_crops, c, h, w = input.size()
-                
                 varInput = torch.autograd.Variable(input.view(-1, c, h, w).cuda())
-                
                 out = self.model(varInput)
                 outMean = out.view(bs, n_crops, -1).mean(1)
-                
                 outPRED = torch.cat((outPRED, outMean.data), 0)
-                # del varOutput, varTarget, varInput, target, input_
-
-
         aurocIndividual = self.computeAUROC(outGT, outPRED)
         aurocMean = np.array(aurocIndividual).mean()
-        
         print ('Test AUROC mean ', aurocMean)
-        
         for i in range (0, len(aurocIndividual)):
             print (CLASS_NAMES[i], ' ', aurocIndividual[i])
         return

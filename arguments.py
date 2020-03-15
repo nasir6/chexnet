@@ -18,7 +18,7 @@ def parse_args():
     parser.add_argument('--num_workers', type=int, default=0, help='number of workers for dataloading')
     parser.add_argument('--batch_size', type=int, default=16, help='dataset batch size')
     parser.add_argument('--unsup_batch_size', type=int, default=80, help='dataset batch size')
-    parser.add_argument('--uda_temp', type=int, default=1, help='tmp factor in uda loss')
+    parser.add_argument('--uda_temp', type=float, default=1.0, help='tmp factor in uda loss')
     parser.add_argument('--epochs', type=int, default=100, help='max number of epochs')
     parser.add_argument('--unsup_ratio', type=float, default=10.0, help='uda loss factor in total loss')
     
