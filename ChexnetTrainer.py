@@ -73,7 +73,7 @@ class ChexnetTrainer ():
 
         transform_only_aug = transforms.Compose([XRaysPolicy()])
         transform_with_aug = transforms.Compose([
-            XRaysPolicy(),
+            XRaysPolicy() if self.args.rand_aug else None,
             transforms.RandomResizedCrop(self.args.crop_resize),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
@@ -150,13 +150,13 @@ class ChexnetTrainer ():
        
     def epochTrain (self, epochID):
         self.model.train()
-        uda_epoch = 20
+        uda_epoch = 0
         for batchID, (inputs, target) in enumerate (self.dataLoaderTrainSup):
             target = target.cuda()
             inputs = inputs.cuda()
             varOutput = self.model(inputs)
             lossvalue = self.criterion(varOutput, target)
-            if self.args.uda and epochID > uda_epoch:
+            if self.args.uda and epochID >= uda_epoch:
                 try:
                     u_input_1, u_input_2 = next(self.iter_u)
                 except StopIteration:
@@ -171,7 +171,7 @@ class ChexnetTrainer ():
             lossvalue.backward()
             self.optimizer.step()
             if batchID % 10 == 9:
-                print(f"{datetime.datetime.now()} --- \t [{batchID:04}/{len(self.dataLoaderTrainSup)}] loss: {lossvalue.item():0.5f} loss UDA: {loss_kl_div.item() if self.args.uda and epochID > uda_epoch else 0 :0.5f}")    
+                print(f"{datetime.datetime.now()} --- \t [{batchID:04}/{len(self.dataLoaderTrainSup)}] loss: {lossvalue.item():0.5f} loss UDA: {loss_kl_div.item() if self.args.uda and epochID >= uda_epoch else 0 :0.5f}")    
         
     def epochVal(self):   
         self.model.eval()
@@ -220,8 +220,9 @@ class ChexnetTrainer ():
     #--------------------------------------------------------------------------------  
     
     def test (self):
-        CLASS_NAMES = [ 'Atelectasis', 'Cardiomegaly', 'Effusion', 'Infiltration', 'Mass', 'Nodule', 'Pneumonia',
-                'Pneumothorax', 'Consolidation', 'Edema', 'Emphysema', 'Fibrosis', 'Pleural_Thickening', 'Hernia']
+        CLASS_NAMES = self.dataLoaderTest.dataset._class_labels
+        # [ 'Atelectasis', 'Cardiomegaly', 'Effusion', 'Infiltration', 'Mass', 'Nodule', 'Pneumonia',
+                # 'Pneumothorax', 'Consolidation', 'Edema', 'Emphysema', 'Fibrosis', 'Pleural_Thickening', 'Hernia']
         
         cudnn.benchmark = True
         outGT = torch.FloatTensor().cuda()

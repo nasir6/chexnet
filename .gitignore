@@ -1,4 +1,6 @@
 checkpoints/*/*.tar
 __pycache__/*
 logs/*
+._*
+*.DS_Store*
 database/xrays/images/*

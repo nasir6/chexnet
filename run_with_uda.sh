@@ -1,7 +1,7 @@
-CUDA_VISIBLE_DEVICES=7 python Main.py \
+CUDA_VISIBLE_DEVICES=5 python Main.py \
 --num_workers 32 \
 --lr 0.0001 \
---unsup_ratio 1.0 \
+--unsup_ratio 5.0 \
 --batch_size 16 \
 --unsup_batch_size 80 \
 --data_root database/xrays \
@@ -9,7 +9,9 @@ CUDA_VISIBLE_DEVICES=7 python Main.py \
 --file_train_unsup new_split/train_unsup.txt \
 --file_val new_split/val_list.txt \
 --file_test new_split/test_list.txt \
---save_dir checkpoints/base_nf \
+--save_dir checkpoints/with_uda_with_nf \
+--rand_aug \
+--uda \
 --uda_temp 1 \
 # --test_only \
 # --checkpoint checkpoints/base/best_auroc.pth.tar \

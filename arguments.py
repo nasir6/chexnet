@@ -14,7 +14,7 @@ def parse_args():
     parser.add_argument('--save_dir', default='checkpoints', help='path to save checkpoint')
     parser.add_argument('--resize', type=int, default=256, help='testing resize')
     parser.add_argument('--crop_resize', type=int, default=224, help='training random crop resize')
-    parser.add_argument('--num_classes', type=int, default=14, help='number of classes in the dataset')
+    parser.add_argument('--num_classes', type=int, default=15, help='number of classes in the dataset')
     parser.add_argument('--num_workers', type=int, default=0, help='number of workers for dataloading')
     parser.add_argument('--batch_size', type=int, default=16, help='dataset batch size')
     parser.add_argument('--unsup_batch_size', type=int, default=80, help='dataset batch size')
@@ -23,6 +23,7 @@ def parse_args():
     parser.add_argument('--unsup_ratio', type=float, default=10.0, help='uda loss factor in total loss')
     
     parser.add_argument('--uda', action='store_true', help='train with uda settings')
+    parser.add_argument('--rand_aug', action='store_true', help='train with rand aug settings')
 
     parser.add_argument('--test_only', action='store_true', help='test only from pretrained model')
 
