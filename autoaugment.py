@@ -15,7 +15,7 @@ class XRaysPolicy(object):
         >>>     XRaysPolicy(),
         >>>     transforms.ToTensor()])
     """
-    def __init__(self, fillcolor=(128, 128, 128)):
+    def __init__(self, fillcolor=(255, 255, 255)):
         self.policies = [
             SubPolicy(0.4, "posterize", 8, 0.6, "rotate", 9, fillcolor),
             SubPolicy(0.6, "equalize", 5, 0.6, "autocontrast", 5, fillcolor),

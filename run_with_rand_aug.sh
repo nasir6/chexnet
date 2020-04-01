@@ -9,11 +9,11 @@ CUDA_VISIBLE_DEVICES=6 python Main.py \
 --file_train_unsup new_split/train_unsup.txt \
 --file_val new_split/val_list.txt \
 --file_test new_split/test_list.txt \
---save_dir checkpoints/without_uda_with_nf \
+--save_dir checkpoints/rand_aug_with_nf \
 --rand_aug \
 --uda_temp 1 \
-# --test_only \
-# --checkpoint checkpoints/base/best_auroc.pth.tar \
+--test_only \
+--checkpoint checkpoints/rand_aug_with_nf/best_auroc.pth.tar \
 # --checkpoint checkpoints/with_uda/best_auroc.pth.tar \
 # --checkpoint checkpoints/without_uda/best_auroc.pth.tar \
 

@@ -78,9 +78,9 @@ class DatasetGenerator (Dataset):
         # import pdb; pdb.set_trace()
 
         # no findings to pick
-        if 'train' in self._split:
-            per_class_samples = len(self._imdb) // len(self._class_ids) - 1
-            no_findings = np.random.permutation(no_findings)[:per_class_samples]
+        # if 'train' in self._split:
+        #     per_class_samples = len(self._imdb) // len(self._class_ids) - 1
+        #     no_findings = np.random.permutation(no_findings)[:per_class_samples]
         self._imdb = np.random.permutation(np.concatenate((self._imdb, no_findings)))
         print(f'Number of images: {len(self._imdb)} with {len(self._class_ids)} class labels from file path {split_path} \n')
 

@@ -13,8 +13,9 @@ CUDA_VISIBLE_DEVICES=5 python Main.py \
 --rand_aug \
 --uda \
 --uda_temp 1 \
-# --test_only \
-# --checkpoint checkpoints/base/best_auroc.pth.tar \
+--test_only \
+--checkpoint checkpoints/with_uda_with_nf/min_loss.pth.tar \
+# --checkpoint checkpoints/with_uda_with_nf/min_loss.pth.tar \
 # --checkpoint checkpoints/with_uda/best_auroc.pth.tar \
 # --checkpoint checkpoints/without_uda/best_auroc.pth.tar \
 

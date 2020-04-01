@@ -11,8 +11,8 @@ CUDA_VISIBLE_DEVICES=7 python Main.py \
 --file_test new_split/test_list.txt \
 --save_dir checkpoints/base_nf \
 --uda_temp 1 \
-# --test_only \
-# --checkpoint checkpoints/base/best_auroc.pth.tar \
+--test_only \
+--checkpoint checkpoints/base_nf/best_auroc.pth.tar \
 # --checkpoint checkpoints/with_uda/best_auroc.pth.tar \
 # --checkpoint checkpoints/without_uda/best_auroc.pth.tar \
 
