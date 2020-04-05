@@ -4,3 +4,4 @@ logs/*
 ._*
 *.DS_Store*
 database/xrays/images/*
+plots/*

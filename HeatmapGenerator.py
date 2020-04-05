@@ -34,12 +34,12 @@ class HeatmapGenerator ():
         elif nnArchitecture == 'DENSE-NET-169': model = DenseNet169(nnClassCount, True).cuda()
         elif nnArchitecture == 'DENSE-NET-201': model = DenseNet201(nnClassCount, True).cuda()
           
-        model = torch.nn.DataParallel(model).cuda()
-
+        # model = torch.nn.DataParallel(model).cuda()
+        model = model.cuda()
         modelCheckpoint = torch.load(pathModel)
         model.load_state_dict(modelCheckpoint['state_dict'])
 
-        self.model = model.module.densenet121.features
+        self.model = model.densenet121.features
         self.model.eval()
         
         #---- Initialize the weights
@@ -91,12 +91,13 @@ class HeatmapGenerator ():
         
 #-------------------------------------------------------------------------------- 
 
+
 pathInputImage = 'test/00009285_000.png'
 pathOutputImage = 'test/heatmap.png'
-pathModel = 'models/m-25012018-123527.pth.tar'
+pathModel = 'checkpoints/with_uda_with_nf/min_loss.pth.tar'
 
 nnArchitecture = 'DENSE-NET-121'
-nnClassCount = 14
+nnClassCount = 15
 
 transCrop = 224
 

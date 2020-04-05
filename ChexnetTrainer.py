@@ -21,6 +21,7 @@ from DatasetGenerator import DatasetGenerator
 from autoaugment import XRaysPolicy
 # from tqdm import tqdm
 from torch.nn.functional import kl_div, softmax, log_softmax
+from plots import plot_roc
 
 model_map = {
     'DenseNet121': DenseNet121,
@@ -221,8 +222,6 @@ class ChexnetTrainer ():
     
     def test (self):
         CLASS_NAMES = self.dataLoaderTest.dataset._class_labels
-        # [ 'Atelectasis', 'Cardiomegaly', 'Effusion', 'Infiltration', 'Mass', 'Nodule', 'Pneumonia',
-                # 'Pneumothorax', 'Consolidation', 'Edema', 'Emphysema', 'Fibrosis', 'Pleural_Thickening', 'Hernia']
         
         cudnn.benchmark = True
         outGT = torch.FloatTensor().cuda()
@@ -238,6 +237,8 @@ class ChexnetTrainer ():
                 outMean = out.view(bs, n_crops, -1).mean(1)
                 outPRED = torch.cat((outPRED, outMean.data), 0)
         aurocIndividual = self.computeAUROC(outGT, outPRED)
+
+        plot_roc(outGT, outPRED, CLASS_NAMES)
         aurocMean = np.array(aurocIndividual).mean()
         print ('Test AUROC mean ', aurocMean)
         for i in range (0, len(aurocIndividual)):
