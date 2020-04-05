@@ -20,21 +20,15 @@ from DensenetModels import DenseNet201
 #---- Class to generate heatmaps (CAM)
 
 class HeatmapGenerator ():
-    
-    #---- Initialize heatmap generator
-    #---- pathModel - path to the trained densenet model
-    #---- nnArchitecture - architecture name DENSE-NET121, DENSE-NET169, DENSE-NET201
-    #---- nnClassCount - class count, 14 for chxray-14
-
  
     def __init__ (self, pathModel, nnArchitecture, nnClassCount, transCrop):
        
         #---- Initialize the network
+        
         if nnArchitecture == 'DENSE-NET-121': model = DenseNet121(nnClassCount, True).cuda()
         elif nnArchitecture == 'DENSE-NET-169': model = DenseNet169(nnClassCount, True).cuda()
         elif nnArchitecture == 'DENSE-NET-201': model = DenseNet201(nnClassCount, True).cuda()
           
-        # model = torch.nn.DataParallel(model).cuda()
         model = model.cuda()
         modelCheckpoint = torch.load(pathModel)
         model.load_state_dict(modelCheckpoint['state_dict'])

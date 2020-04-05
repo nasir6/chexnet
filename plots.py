@@ -22,12 +22,12 @@ def plot_roc(gt, preds, classes):
 
         plt.title('Receiver Operating Characteristic')
         plt.plot(fpr, tpr, colors[i], label = f'{classes[i]} AUC = {roc_auc:0.2f}')
-        plt.legend(loc = 'lower right')
-        plt.plot([0, 1], [0, 1],'r--')
-        plt.xlim([0, 1])
-        plt.ylim([0, 1])
-        plt.ylabel('True Positive Rate')
-        plt.xlabel('False Positive Rate')
-        # plt.save
-        plt.savefig(f'plots/{classes[i]}_roc_curve.pdf')
+
+    plt.legend(loc = 'lower right')
+    plt.plot([0, 1], [0, 1],'r--')
+    plt.xlim([0, 1])
+    plt.ylim([0, 1])
+    plt.ylabel('True Positive Rate')
+    plt.xlabel('False Positive Rate')
+    plt.savefig(f'plots/roc_curve.pdf')
 
