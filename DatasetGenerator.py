@@ -13,12 +13,12 @@ class DatasetGenerator (Dataset):
     #-------------------------------------------------------------------------------- 
     
     
-    def __init__ (self, data_dir, pathDatasetFile, transform, transform_aug=None):
-    
+    def __init__ (self, data_dir, pathDatasetFile, transform, transform_aug=None, iniclude_nf=False):
+        self.iniclude_nf = iniclude_nf
         self.listImagePaths = []
         self.listImageLabels = []
         self.transform = transform
-        self.num_classes = 14
+        self.num_classes = 15 if self.iniclude_nf else 14
 
         self._data_path = data_dir
         
@@ -47,8 +47,10 @@ class DatasetGenerator (Dataset):
         labels = [label.split('|') for label in labels]
 
         # np.setdiff1d((self._class_labels, np.array( ['No Finding'])))
+        self._class_labels = np.setdiff1d(np.unique(np.concatenate(labels)), np.array( ['No Finding']))
 
-        self._class_labels = np.unique(np.concatenate(labels)) #np.setdiff1d(np.unique(np.concatenate(labels)), np.array( ['No Finding']))
+        if self.iniclude_nf:
+            self._class_labels = np.unique(np.concatenate(labels))
 
         labels = np.array(labels)[split_index]
         image_index = image_index[split_index]
@@ -62,6 +64,8 @@ class DatasetGenerator (Dataset):
         no_findings = []
         for index in range(len(split_index)):
             if len(labels[index]) == 1 and labels[index][0] == 'No Finding':
+                if self.iniclude_nf == False:
+                    continue
                 class_ids = [self._class_ids[label] for label in labels[index]]
                 im_dir = os.path.join(self._data_path, 'images')
                 no_findings.append({
@@ -81,7 +85,8 @@ class DatasetGenerator (Dataset):
         # if 'train' in self._split:
         #     per_class_samples = len(self._imdb) // len(self._class_ids) - 1
         #     no_findings = np.random.permutation(no_findings)[:per_class_samples]
-        self._imdb = np.random.permutation(np.concatenate((self._imdb, no_findings)))
+        if self.iniclude_nf:
+            self._imdb = np.random.permutation(np.concatenate((self._imdb, no_findings)))
         print(f'Number of images: {len(self._imdb)} with {len(self._class_ids)} class labels from file path {split_path} \n')
 
 

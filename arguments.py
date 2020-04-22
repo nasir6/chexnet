@@ -26,6 +26,7 @@ def parse_args():
     parser.add_argument('--rand_aug', action='store_true', help='train with rand aug settings')
 
     parser.add_argument('--test_only', action='store_true', help='test only from pretrained model')
+    parser.add_argument('--iniclude_nf', action='store_true', help='include no finding class in training')
 
     parser.add_argument('--pretrained', type=bool, default=True, help='load imagenet pretrained model')
     parser.add_argument('--lr', type=float, default=0.0001, help='learning rate to train classifier')

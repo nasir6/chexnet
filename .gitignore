@@ -1,4 +1,5 @@
 checkpoints/*/*.tar
+checkpoints/*/*/*.tar
 __pycache__/*
 logs/*
 ._*

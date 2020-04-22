@@ -19,6 +19,7 @@ from sklearn.metrics.ranking import roc_auc_score
 from DensenetModels import DenseNet121, DenseNet169, DenseNet201
 from DatasetGenerator import DatasetGenerator
 from autoaugment import XRaysPolicy
+from randaug import RandAugmentPolicy
 # from tqdm import tqdm
 from torch.nn.functional import kl_div, softmax, log_softmax
 from plots import plot_roc
@@ -61,6 +62,13 @@ class ChexnetTrainer ():
 
         self.load_checkpoint(args.checkpoint)
         self.initDataLoaders()
+        self.train_loss = []
+        self.train_uda_loss = []
+        self.val_loss_epoch = []
+        self.val_loss_iter = []
+
+        self.val_acc = []
+        
 
     def initDataLoaders(self):
         normalize = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
@@ -73,7 +81,9 @@ class ChexnetTrainer ():
         transformSequence=transforms.Compose(transformList)
 
         transform_only_aug = transforms.Compose([XRaysPolicy()])
+        # transform_only_aug = transforms.Compose([RandAugmentPolicy()])
         transform_with_aug = transforms.Compose([
+            # RandAugmentPolicy() if self.args.rand_aug else None,
             XRaysPolicy() if self.args.rand_aug else None,
             transforms.RandomResizedCrop(self.args.crop_resize),
             transforms.RandomHorizontalFlip(),
@@ -88,16 +98,17 @@ class ChexnetTrainer ():
                 transforms.Lambda(lambda crops: torch.stack([normalize(crop) for crop in crops])) 
             ])
         
-        datasetTest = DatasetGenerator(self.args.data_root, self.args.file_test, transform=test_transformSequence)
+        datasetTest = DatasetGenerator(self.args.data_root, self.args.file_test, transform=test_transformSequence, iniclude_nf=self.args.iniclude_nf)
         self.dataLoaderTest = DataLoader(dataset=datasetTest, batch_size=self.args.batch_size, num_workers=self.args.num_workers, shuffle=False )
         
-        datasetTrain = DatasetGenerator(self.args.data_root, self.args.file_train, transform=transformSequence)
+        datasetTrain = DatasetGenerator(self.args.data_root, self.args.file_train, transform=transformSequence, iniclude_nf=self.args.iniclude_nf)
         if self.args.uda:
-            datasetTrain = DatasetGenerator(self.args.data_root, self.args.file_train, transform=transform_with_aug)
+            datasetTrain.transform = transform_with_aug
+            # datasetTrain = DatasetGenerator(self.args.data_root, self.args.file_train, transform=transform_with_aug, iniclude_nf=self.args.iniclude_nf)
 
 
-        datasetTrainUnsup = DatasetGenerator(self.args.data_root, self.args.file_train_unsup, transform=transformSequence, transform_aug=transform_only_aug)
-        datasetVal =   DatasetGenerator(self.args.data_root, self.args.file_val, transform=transformSequence)
+        datasetTrainUnsup = DatasetGenerator(self.args.data_root, self.args.file_train_unsup, transform=transformSequence, transform_aug=transform_only_aug, iniclude_nf=self.args.iniclude_nf)
+        datasetVal =   DatasetGenerator(self.args.data_root, self.args.file_val, transform=transformSequence, iniclude_nf=self.args.iniclude_nf)
               
         self.dataLoaderTrainSup = DataLoader(dataset=datasetTrain, batch_size=self.args.batch_size, shuffle=True,  num_workers=self.args.num_workers )
         self.dataLoaderUnsup = DataLoader(dataset=datasetTrainUnsup, batch_size=self.args.unsup_batch_size, shuffle=True,  num_workers=self.args.num_workers )
@@ -146,7 +157,12 @@ class ChexnetTrainer ():
                 print(f"{datetime.datetime.now()} --- \t Epoch [{epochID + 1}] [save] AUROC mean: {aurocMean:0.4f} loss: {lossVal:0.6f}")
             else:
                 print(f"{datetime.datetime.now()} --- \t Epoch [{epochID + 1}] [----] AUROC mean: {aurocMean:0.4f} loss: {lossVal:0.6f}")
-                     
+
+            np.save(f"{self.args.save_dir}/train_loss.npy", np.array(self.train_loss))    
+            np.save(f"{self.args.save_dir}/train_uda_loss.npy", np.array(self.train_uda_loss))    
+            np.save(f"{self.args.save_dir}/val_loss_epoch.npy", np.array(self.val_loss_epoch))    
+            np.save(f"{self.args.save_dir}/val_loss_iter.npy", np.array(self.val_loss_iter))    
+            np.save(f"{self.args.save_dir}/val_acc.npy", np.array(self.val_acc))    
     #-------------------------------------------------------------------------------- 
        
     def epochTrain (self, epochID):
@@ -157,6 +173,8 @@ class ChexnetTrainer ():
             inputs = inputs.cuda()
             varOutput = self.model(inputs)
             lossvalue = self.criterion(varOutput, target)
+            self.train_loss.append(lossvalue.item())
+
             if self.args.uda and epochID >= uda_epoch:
                 try:
                     u_input_1, u_input_2 = next(self.iter_u)
@@ -168,9 +186,12 @@ class ChexnetTrainer ():
                 loss_kl_div = self.args.unsup_ratio*self.get_uda_loss(preds1, preds2)
                 lossvalue = lossvalue + loss_kl_div
 
+
+
             self.optimizer.zero_grad()
             lossvalue.backward()
             self.optimizer.step()
+            self.train_uda_loss.append(loss_kl_div.item() if self.args.uda and epochID >= uda_epoch else 0)
             if batchID % 10 == 9:
                 print(f"{datetime.datetime.now()} --- \t [{batchID:04}/{len(self.dataLoaderTrainSup)}] loss: {lossvalue.item():0.5f} loss UDA: {loss_kl_div.item() if self.args.uda and epochID >= uda_epoch else 0 :0.5f}")    
         
@@ -195,15 +216,21 @@ class ChexnetTrainer ():
                 losstensor = self.criterion(varOutput, varTarget)
                 losstensorMean += losstensor
                 
+                self.val_loss_iter.append(losstensor.item())
                 lossVal += losstensor.item()
                 lossValNorm += 1
                 del varOutput, varTarget, varInput, target, input_
         outLoss = lossVal / lossValNorm
+        
+        self.val_loss_epoch.append(outLoss)
+
         losstensorMean = losstensorMean / lossValNorm
         
         aurocIndividual = self.computeAUROC(outGT, outPRED)
         aurocMean = np.array(aurocIndividual).mean()
         print (f'{datetime.datetime.now()} --- \t Val AUROC mean: {aurocMean}')
+        self.val_acc.append(aurocMean)
+
 
         return outLoss, losstensorMean, aurocMean
                

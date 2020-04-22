@@ -16,6 +16,7 @@ def plot_roc(gt, preds, classes):
     # import pdb; pdb.set_trace()
     gt = gt.data.cpu().numpy()
     preds = preds.data.cpu().numpy()
+    fig = plt.figure(figsize=(10, 10))
     for i in range(len(classes)):
         fpr, tpr, _ = metrics.roc_curve(gt[:, i], preds[:, i])
         roc_auc = metrics.auc(fpr, tpr)
@@ -29,5 +30,5 @@ def plot_roc(gt, preds, classes):
     plt.ylim([0, 1])
     plt.ylabel('True Positive Rate')
     plt.xlabel('False Positive Rate')
-    plt.savefig(f'plots/roc_curve.pdf')
+    fig.savefig(f'plots/roc_curve.pdf')
 

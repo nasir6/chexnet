@@ -55,23 +55,25 @@ def create_train_val_test_split():
     with open(f'{dir_path}/val_list.txt', 'w') as f:
         f.writelines([f"{item}\n"  for item in val_list])
 
-def split_sup_unsup():
+def split_sup_unsup(ratios):
     # newly created split or load the old split to create unsup and sup files
     dir_path = f"{pathDirData}/new_split"
     with open(f"{dir_path}/train_list.txt", 'r') as f: file_names = f.readlines()
     file_names = np.array([file_name.strip().split(' ')[0] for file_name in file_names])
     file_names_shuffled = np.random.permutation(file_names)
     # num of sup 10% of training data
-    num_sup_train = int(0.2 * len(file_names_shuffled))
-    sup_file_list = file_names_shuffled[:num_sup_train]
-    unsup_file_list = file_names_shuffled[num_sup_train:]
+    for ratio in ratios:
+    # ratio = 15
+        num_sup_train = int((ratio/100) * len(file_names_shuffled))
+        sup_file_list = file_names_shuffled[:num_sup_train]
+        unsup_file_list = file_names_shuffled[num_sup_train:]
 
-    print(f'num of sup {len(sup_file_list)}')
-    print(f'num of unsup {len(unsup_file_list)}')
-    with open(f'{dir_path}/train_sup.txt', 'w') as f:
-        f.writelines([f"{item}\n"  for item in sup_file_list])
-    with open(f'{dir_path}/train_unsup.txt', 'w') as f:
-        f.writelines([f"{item}\n"  for item in unsup_file_list])
+        print(f'num of sup {len(sup_file_list)}')
+        print(f'num of unsup {len(unsup_file_list)}')
+        with open(f'{dir_path}/train_sup_{ratio}.txt', 'w') as f:
+            f.writelines([f"{item}\n"  for item in sup_file_list])
+        with open(f'{dir_path}/train_unsup_{ratio}.txt', 'w') as f:
+            f.writelines([f"{item}\n"  for item in unsup_file_list])
 
 # create_train_val_test_split()
-split_sup_unsup()
+split_sup_unsup([2, 4, 6, 8, 12, 16])
