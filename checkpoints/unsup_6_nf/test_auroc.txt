@@ -1,0 +1,17 @@
+Test AUROC mean:  0.788000 
+ Atelectasis:  0.778861 
+ Cardiomegaly:  0.832550 
+ Consolidation:  0.778326 
+ Edema:  0.866762 
+ Effusion:  0.855745 
+ Emphysema:  0.851511 
+ Fibrosis:  0.766067 
+ Hernia:  0.852724 
+ Infiltration:  0.680182 
+ Mass:  0.782114 
+ No Finding:  0.758176 
+ Nodule:  0.718373 
+ Pleural_Thickening:  0.740515 
+ Pneumonia:  0.716590 
+ Pneumothorax:  0.841501 
+ 

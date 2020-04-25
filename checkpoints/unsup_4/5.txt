@@ -1,0 +1,14 @@
+Atelectasis:  0.216            
+Cardiomegaly:  0.006            
+Consolidation:  0.039            
+Edema:  0.021            
+Effusion:  0.134            
+Emphysema:  0.729            
+Fibrosis:  0.004            
+Hernia:  0.003            
+Infiltration:  0.306            
+Mass:  0.026           gt 
+Nodule:  0.035            
+Pleural_Thickening:  0.030            
+Pneumonia:  0.073            
+Pneumothorax:  0.512           gt 
