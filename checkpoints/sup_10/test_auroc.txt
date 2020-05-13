@@ -11,6 +11,6 @@ Test AUROC mean:  0.752747
  Mass:  0.744892 
  Nodule:  0.690463 
  Pleural_Thickening:  0.679059 
- Pneumonia:  0.631214 
+ Pneumonia:  0.631213 
  Pneumothorax:  0.778480 
  

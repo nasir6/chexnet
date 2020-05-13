@@ -4,7 +4,7 @@ Test AUROC mean:  0.804596
  Consolidation:  0.780343 
  Edema:  0.874505 
  Effusion:  0.863239 
- Emphysema:  0.870473 
+ Emphysema:  0.870472 
  Fibrosis:  0.795510 
  Hernia:  0.873865 
  Infiltration:  0.690573 

@@ -5,11 +5,11 @@ CUDA_VISIBLE_DEVICES=3 python Main.py \
 --batch_size 16 \
 --unsup_batch_size 80 \
 --data_root database/xrays \
---file_train new_split/train_sup_2.txt \
---file_train_unsup new_split/train_unsup_2.txt \
+--file_train new_split/train_sup_20.txt \
+--file_train_unsup new_split/train_unsup_20.txt \
 --file_val new_split/val_list.txt \
 --file_test new_split/test_list.txt \
---save_dir checkpoints/unsup_2_nf \
+--save_dir checkpoints/unsup_20_nf \
 --rand_aug \
 --uda \
 --uda_temp 0.5 \
